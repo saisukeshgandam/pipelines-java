@@ -1,0 +1,88 @@
+trigger:
+  branches:
+    include:
+      - main   # Runs pipeline only when changes pushed to main branch
+
+# Use Microsoft-hosted agent with JDK + Maven pre-installed
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+  # ==============================
+  # 1. Build Stage
+  # ==============================
+  - stage: Build
+    displayName: "Build & Package"
+    jobs:
+      - job: BuildJob
+        displayName: "Maven Build Job"
+        steps:
+          # Checkout repo
+          - checkout: self
+
+          # Set up Java
+          - task: JavaToolInstaller@0
+            inputs:
+              versionSpec: '11'   # or 17 if your app requires
+              jdkArchitecture: 'x64'
+
+          # Run Maven build
+          - task: Maven@4
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'package'
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              javaHomeOption: 'JDKVersion'
+              jdkVersionOption: '1.11'
+
+          # Publish build artifact (JAR/WAR file)
+          - publish: '$(System.DefaultWorkingDirectory)/target/*.jar'
+            artifact: drop
+
+  # ==============================
+  # 2. Deploy to Dev Stage
+  # ==============================
+  - stage: Deploy_Dev
+    displayName: "Deploy to Dev Environment"
+    dependsOn: Build
+    jobs:
+      - deployment: DeployDevApp
+        displayName: "Deploy to Dev App Service"
+        environment: 'dev'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: drop
+
+                - task: AzureWebApp@1
+                  inputs:
+                    azureSubscription: 'Zomato-ARG'
+                    appName: 'my-dev-app'
+                    package: '$(Pipeline.Workspace)/drop/*.jar'
+
+  # ==============================
+  # 3. Deploy to Prod Stage
+  # ==============================
+  - stage: Deploy_Prod
+    displayName: "Deploy to Prod Environment"
+    dependsOn: Deploy_Dev
+    jobs:
+      - deployment: DeployProdApp
+        displayName: "Deploy to Prod App Service"
+        environment: 'prod'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: drop
+
+                # Optional: Add a manual approval gate in Azure DevOps Environments UI
+                - task: AzureWebApp@1
+                  inputs:
+                    azureSubscription: 'Zomato-ARG'
+                    appName: 'my-prod-app'
+                    package: '$(Pipeline.Workspace)/drop/*.jar'
