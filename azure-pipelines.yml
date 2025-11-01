@@ -38,21 +38,16 @@ stages:
     displayName: "Deploy to Dev Environment"
     dependsOn: Build
     jobs:
-      - deployment: DeployDevApp
-        displayName: "Deploy to Dev App Service"
-        environment: 'dev'
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                - download: current
-                  artifact: drop
-
-                - task: AzureWebApp@1
-                  inputs:
-                    azureSubscription: 'Zomato-ARG'
-                    appName: 'my-dev-app'
-                    package: '$(Pipeline.Workspace)/drop/*.jar'
+    - job: DeployDevApp
+      displayName: "Deploy to Dev App Service"
+      steps:
+        - download: current
+          artifact: drop
+        - task: AzureWebApp@1
+          inputs:
+            azureSubscription: 'Zomato-ARG'
+            appName: 'my-dev-app'
+            package: '$(Pipeline.Workspace)/drop/*.jar'
 
   # ==============================
   # 3. Deploy to Prod Stage
